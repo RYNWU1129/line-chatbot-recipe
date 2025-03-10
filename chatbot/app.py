@@ -8,8 +8,8 @@ import os
 HF_API_KEY = os.getenv("HF_API_KEY")  # 改用環境變數
 
 # 替換為你的 Channel Access Token & Secret
-LINE_ACCESS_TOKEN = "3GF9S76wI6xYh7+ucK4Ozd0nFDtUlq8EHNBBGxweukbVtouM7D4j9mKwG/RfQ7dHwSQ5EadKDjyXwHNGiinh4mupLlNjCBfHiRS8WahnXMJUlTQ/rqOVim8BSjNcwuODm80i8pXpEHA9/p82ZYK6YwdB04t89/1O/w1cDnyilFU="
-LINE_SECRET = "7feba977d46a33dd29b6915e540a4905"
+LINE_ACCESS_TOKEN = os.getenv("LINE_ACCESS_TOKEN")
+LINE_SECRET = os.getenv("LINE_SECRET")
 
 app = Flask(__name__)
 CORS(app)  # 允許所有跨域請求
