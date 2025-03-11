@@ -36,31 +36,28 @@ def test_line_api():
 
 CORS(app)
 
-@app.route("/", methods=["GET", "HEAD"])
-def home():
-    return jsonify({"message": "Hello, this is your chatbot API!"})
-
-# 初始化 LINE Bot
-line_bot_api = MessagingApi(LINE_ACCESS_TOKEN)
-handler = WebhookHandler(LINE_SECRET)
-
 @app.route("/callback", methods=["POST"])
 def callback():
     try:
         signature = request.headers.get("X-Line-Signature", "")
         body = request.get_data(as_text=True)
-        
-        # 🔍 Debug 輸出請求內容
+
+        # 🔍 Debug: 確認請求內容
         print(f"📥 Received Webhook Request: {body}")
         print(f"🔑 Signature: {signature}")
+
+        # 檢查 Body 是否為空
+        if not body:
+            print("❌ 錯誤: 收到空的請求 Body！")
+            return "Bad Request - Empty Body", 400
 
         handler.handle(body, signature)
     except InvalidSignatureError:
         print("❌ Invalid Signature Error!")
-        abort(400)
+        return "Invalid Signature", 400
     except Exception as e:
         print(f"❌ Unexpected Error: {e}")
-        abort(400)
+        return "Internal Server Error", 500
 
     return "OK"
 
