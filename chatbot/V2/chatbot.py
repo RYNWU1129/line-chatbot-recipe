@@ -30,8 +30,7 @@ app = Flask(__name__)
 CORS(app)
 
 # 初始化 LINE Messaging API 和 Webhook Handler
-config = Configuration(access_token=LINE_ACCESS_TOKEN)
-line_bot_api = MessagingApi(configuration=config)
+line_bot_api = MessagingApi(LINE_ACCESS_TOKEN)
 handler = WebhookHandler(LINE_SECRET)
 
 # 測試 LINE API 連接
