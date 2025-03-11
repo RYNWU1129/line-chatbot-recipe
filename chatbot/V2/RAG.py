@@ -36,6 +36,21 @@ else:
 
 db = firestore.client()
 
+# 測試 Firebase 連接
+def test_firebase_connection():
+    try:
+        # 創建一個測試文檔
+        test_ref = db.collection("test").document("connection_test")
+        test_ref.set({"timestamp": firestore.SERVER_TIMESTAMP})
+        print("✅ Firebase 連接成功")
+        return True
+    except Exception as e:
+        print(f"❌ Firebase 連接失敗: {e}")
+        return False
+        
+# 啟動時測試 Firebase 連接
+test_firebase_connection()
+
 # ✅ 加載 embedding 模型
 model = SentenceTransformer("all-MiniLM-L6-v2")
 
@@ -49,16 +64,19 @@ def initialize_rag():
     print("🔍 開始初始化 RAG 系統...")
     
     if os.path.exists(FAISS_INDEX_PATH) and os.path.exists(METADATA_PATH):
-        print("✅ 找到預處理的 FAISS 索引和元數據，直接載入")
-        index = faiss.read_index(FAISS_INDEX_PATH)
-        df = pd.read_csv(METADATA_PATH)
-        print("✅ RAG 系統初始化完成！")
-        return index, df
+        try:
+            print(f"✅ 找到預處理的文件，正在載入 {FAISS_INDEX_PATH} 和 {METADATA_PATH}")
+            index = faiss.read_index(FAISS_INDEX_PATH)
+            df = pd.read_csv(METADATA_PATH)
+            print(f"✅ 成功載入索引 (向量數: {index.ntotal}) 和元數據 (行數: {len(df)})")
+            return index, df
+        except Exception as e:
+            print(f"❌ 載入索引或元數據失敗: {e}")
+            raise
     else:
-        error_msg = f"❌ 找不到預處理的索引文件！在 {os.getcwd()} 中尋找 {FAISS_INDEX_PATH} 和 {METADATA_PATH} 失敗。"
+        files_found = os.listdir(".")
+        error_msg = f"❌ 找不到預處理文件! 目錄內容: {files_found}"
         print(error_msg)
-        # 列出當前目錄內容，用於調試
-        print("目錄內容:", os.listdir("."))
         raise FileNotFoundError(error_msg)
 
 # ----------------------------------------- 
@@ -134,23 +152,41 @@ def chat_with_model(user_id, user_input):
     print(f"📝 處理用戶 {user_id} 的輸入: {user_input}")
     
     # 確保 RAG 系統已初始化
-    if index is None or df is None:
-        print("⚠️ 在使用聊天模型前，確保 RAG 已初始化...")
+    retry_count = 0
+    while (index is None or df is None) and retry_count < 3:
+        print(f"⚠️ RAG 未初始化，嘗試初始化 (嘗試 {retry_count+1}/3)")
         try:
             initialize_rag()
+            break
         except Exception as e:
             print(f"❌ RAG 初始化失敗: {e}")
-            return "Sorry, the recipe system is currently initializing. Please try again in a moment."
+            retry_count += 1
+            import time
+            time.sleep(1)  # 等待1秒再重試
+    
+    # 如果仍未初始化成功
+    if index is None or df is None:
+        print("❌ RAG 初始化失敗，無法繼續")
+        return "Sorry, I'm currently experiencing technical difficulties. Please try again later."
     
     # 獲取用戶數據
-    user_data = get_user_data(user_id)
-    preferences = user_data.get("preferences", None) if user_data else None
-    
+    try:
+        user_data = get_user_data(user_id)
+        print(f"📊 用戶數據: {user_data}")
+        preferences = user_data.get("preferences", None) if user_data else None
+    except Exception as e:
+        print(f"❌ 獲取用戶數據失敗: {e}")
+        preferences = None
+
     # 檢查是否是設置偏好的訊息
     if not preferences:
-        # 保存用戶偏好
-        set_user_data(user_id, {"preferences": user_input})
-        return f"Thanks! I've noted your dietary preferences: {user_input}. Now you can ask for recipe recommendations!"
+        print(f"🆕 新用戶 {user_id}，設置飲食偏好: {user_input}")
+        try:
+            set_user_data(user_id, {"preferences": user_input})
+            return f"Thanks! I've noted your dietary preferences: {user_input}. Now you can ask for recipe recommendations!"
+        except Exception as e:
+            print(f"❌ 設置用戶偏好失敗: {e}")
+            return "I couldn't save your preferences. Please try again."
     
     # 搜尋相關食譜
     print(f"🔍 為查詢 '{user_input}' 搜尋食譜...")
