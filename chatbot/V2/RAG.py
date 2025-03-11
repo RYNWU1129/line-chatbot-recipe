@@ -138,7 +138,7 @@ from firebase_admin import credentials, firestore
 # ----------------------------------------- 
 FAISS_INDEX_PATH = "recipe_faiss.index"
 METADATA_PATH = "recipe_metadata.csv"
-CSV_PATH = "RecipeNLG_dataset.csv"  # 改為相對路徑，確保 Render 也能找到
+CSV_PATH = "https://drive.google.com/file/d/1IuGWrM_YwnYQwtp06SvWji695NJ7d_wS/view?usp=sharing"  # 改為相對路徑，確保 Render 也能找到
 
 # ✅ 從環境變數讀取 API Keys
 openai_api_key = os.getenv("OPENAI_API_KEY")
