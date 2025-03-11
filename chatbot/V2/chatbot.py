@@ -46,12 +46,22 @@ handler = WebhookHandler(LINE_SECRET)
 
 @app.route("/callback", methods=["POST"])
 def callback():
-    signature = request.headers["X-Line-Signature"]
-    body = request.get_data(as_text=True)
     try:
+        signature = request.headers.get("X-Line-Signature", "")
+        body = request.get_data(as_text=True)
+        
+        # 🔍 Debug 輸出請求內容
+        print(f"📥 Received Webhook Request: {body}")
+        print(f"🔑 Signature: {signature}")
+
         handler.handle(body, signature)
     except InvalidSignatureError:
+        print("❌ Invalid Signature Error!")
         abort(400)
+    except Exception as e:
+        print(f"❌ Unexpected Error: {e}")
+        abort(400)
+
     return "OK"
 
 @handler.add(MessageEvent, message=TextMessage)
