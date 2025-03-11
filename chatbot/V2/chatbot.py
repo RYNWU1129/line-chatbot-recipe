@@ -1,9 +1,9 @@
 from flask import Flask, request, abort
 from flask_cors import CORS
-from linebot.v3.messaging import MessagingApi, Configuration
+from linebot.v3.messaging import MessagingApi, Configuration, TextMessage
 from linebot.v3.webhook import WebhookHandler
 from linebot.v3.exceptions import InvalidSignatureError
-from linebot.v3.webhooks import MessageEvent, TextMessage, TextSendMessage
+from linebot.v3.webhooks import MessageEvent
 import os
 import threading
 
