@@ -5,7 +5,18 @@ from linebot.v3.webhook import WebhookHandler
 from linebot.v3.exceptions import InvalidSignatureError
 from linebot.v3.webhooks import MessageEvent
 import os
-from RAG import chat_with_model  # 匯入 RAG 的 chat_with_model
+import threading
+
+# 先僅導入 chat_with_model 函數
+from RAG import chat_with_model  
+
+# 定義一個函數來初始化 RAG
+def initialize_rag_in_background():
+    print("🔄 開始在背景初始化 RAG 系統...")
+    # 在這裡導入 RAG 模組進行初始化，避免在應用啟動時立即執行
+    from RAG import initialize_rag
+    initialize_rag()
+    print("✅ RAG 系統初始化完成！")
 
 # 替換為你的 Channel Access Token & Secret
 LINE_ACCESS_TOKEN = os.getenv("LINE_ACCESS_TOKEN")
@@ -19,7 +30,7 @@ def home():
     return jsonify({"message": "Hello, this is your chatbot API!"})
 
 # 初始化 LINE Bot
-line_bot_api = MessagingApi(LINE_ACCESS_TOKEN) #
+line_bot_api = MessagingApi(LINE_ACCESS_TOKEN)
 handler = WebhookHandler(LINE_SECRET)
 
 @app.route("/callback", methods=["POST"])
@@ -56,8 +67,13 @@ def handle_message(event):
         messages=[TextMessage(text=response_text)]
     )
 
+# 啟動時在背景線程中初始化 RAG
+print("🚀 啟動 Flask 應用並在背景初始化 RAG...")
+thread = threading.Thread(target=initialize_rag_in_background)
+thread.daemon = True
+thread.start()
+
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 5000))  # 讀取 Render 環境變數 PORT
+    # 啟動 Flask 服務器
+    port = int(os.environ.get("PORT", 8080))
     app.run(host="0.0.0.0", port=port, debug=False)
-
-

@@ -142,6 +142,10 @@ FAISS_INDEX_PATH = "recipe_faiss.index"
 METADATA_PATH = "recipe_metadata.csv"
 CSV_PATH = "https://drive.google.com/file/d/1IuGWrM_YwnYQwtp06SvWji695NJ7d_wS/view?usp=sharing"
 
+# 全局變數，將在 initialize_rag 中賦值
+index = None
+df = None
+
 # ✅ 從環境變數讀取 API Keys
 openai_api_key = os.getenv("OPENAI_API_KEY")
 firebase_json = os.getenv("FIREBASE_CREDENTIALS")
@@ -177,7 +181,7 @@ def process_csv_in_chunks():
     # 創建空的 FAISS 索引
     # all-MiniLM-L6-v2 的嵌入維度是 384
     embedding_dim = 384
-    index = faiss.IndexFlatL2(embedding_dim)
+    local_index = faiss.IndexFlatL2(embedding_dim)
     
     # 創建空的元數據 DataFrame
     metadata_df = pd.DataFrame()
@@ -230,7 +234,7 @@ def process_csv_in_chunks():
         # 添加到 FAISS 索引
         print(f"✅ 添加第 {rows_processed-len(current_chunk)+1} 至 {rows_processed} 行的嵌入到 FAISS 索引...")
         batch_embeddings_array = np.vstack(batch_embeddings)
-        index.add(batch_embeddings_array)
+        local_index.add(batch_embeddings_array)
         
         # 釋放記憶體
         del batch_embeddings, batch_embeddings_array, current_chunk, metadata_chunk
@@ -239,7 +243,7 @@ def process_csv_in_chunks():
     
     # 保存索引和元數據
     print("✅ 保存 FAISS 索引和元數據...")
-    faiss.write_index(index, FAISS_INDEX_PATH)
+    faiss.write_index(local_index, FAISS_INDEX_PATH)
     metadata_df.to_csv(METADATA_PATH, index=False)
     
     # 清理
@@ -247,16 +251,32 @@ def process_csv_in_chunks():
         os.remove(temp_csv_path)
     print("✅ 分批處理完成！")
     
-    return index, metadata_df
+    return local_index, metadata_df
 
-# ✅ 加載 FAISS index 和食譜數據
-if os.path.exists(FAISS_INDEX_PATH) and os.path.exists(METADATA_PATH):
-    print("✅ 找到現有的 FAISS 索引和元數據，直接載入")
-    index = faiss.read_index(FAISS_INDEX_PATH)
-    df = pd.read_csv(METADATA_PATH)
-else:
-    # 使用分批處理代替原始處理方法
-    index, df = process_csv_in_chunks()
+# ----------------------------------------- 
+# 🔹 RAG 初始化函數 (用於背景執行)
+# ----------------------------------------- 
+def initialize_rag():
+    """初始化 RAG 系統，加載或創建 FAISS 索引和元數據"""
+    global index, df
+    
+    print("🔍 開始初始化 RAG 系統...")
+    
+    # 檢查是否存在預處理的索引和元數據
+    if os.path.exists(FAISS_INDEX_PATH) and os.path.exists(METADATA_PATH):
+        print("✅ 找到現有的 FAISS 索引和元數據，直接載入")
+        index = faiss.read_index(FAISS_INDEX_PATH)
+        df = pd.read_csv(METADATA_PATH)
+    else:
+        # 使用分批處理來創建索引和元數據
+        print("⚠️ 未找到預處理文件，開始創建...")
+        index, df = process_csv_in_chunks()
+    
+    print("✅ RAG 系統初始化完成！")
+    return index, df
+
+# 自動初始化 (這行代碼將被註釋掉，由 chatbot.py 中的背景線程調用)
+# index, df = initialize_rag()
 
 # ----------------------------------------- 
 # 🔹 Firestore 函數
@@ -288,6 +308,13 @@ def save_user_conversation(user_id, messages):
 # ----------------------------------------- 
 def search_recipe(query, k=3):
     """ 透過 FAISS 搜尋相似食譜 """
+    global index, df
+    
+    # 確保 index 和 df 已初始化
+    if index is None or df is None:
+        print("⚠️ FAISS 索引和元數據未初始化，嘗試初始化...")
+        initialize_rag()
+    
     try:
         query_embedding = model.encode(query, convert_to_numpy=True).reshape(1, -1)
         distances, indices = index.search(query_embedding, k)
@@ -301,6 +328,15 @@ def search_recipe(query, k=3):
 # ----------------------------------------- 
 def chat_with_model(user_id, user_input):
     """ GPT 生成回應並整合 FAISS 搜尋結果 """
+    global index, df
+    
+    # 確保 RAG 系統已初始化
+    if index is None or df is None:
+        print("⚠️ 在使用聊天模型前，確保 RAG 已初始化...")
+        # 如果尚未初始化，這裡會返回一個友好的提示而不是嘗試初始化
+        # 因為初始化應該由背景線程完成
+        return "I'm still warming up. Please try again in a moment!"
+    
     user_data = get_user_data(user_id)
     preferences = user_data.get("preferences", None) if user_data else None
 
