@@ -125,6 +125,7 @@
 
 import os
 import json
+import gdown
 import pandas as pd
 import faiss
 import numpy as np
@@ -138,7 +139,7 @@ from firebase_admin import credentials, firestore
 # ----------------------------------------- 
 FAISS_INDEX_PATH = "recipe_faiss.index"
 METADATA_PATH = "recipe_metadata.csv"
-CSV_PATH = "https://drive.google.com/file/d/1IuGWrM_YwnYQwtp06SvWji695NJ7d_wS/view?usp=sharing"  # 改為相對路徑，確保 Render 也能找到
+CSV_PATH = "https://drive.google.com/file/d/1IuGWrM_YwnYQwtp06SvWji695NJ7d_wS/view?usp=sharing"
 
 # ✅ 從環境變數讀取 API Keys
 openai_api_key = os.getenv("OPENAI_API_KEY")
@@ -163,20 +164,39 @@ model = SentenceTransformer("all-MiniLM-L6-v2")
 
 # ✅ 加載 FAISS index 和食譜數據
 if os.path.exists(FAISS_INDEX_PATH) and os.path.exists(METADATA_PATH):
+    print("✅ 找到現有的 FAISS 索引和元數據，直接載入")
     index = faiss.read_index(FAISS_INDEX_PATH)
     df = pd.read_csv(METADATA_PATH)
 else:
-    df = pd.read_csv(CSV_PATH, nrows=10000)
+    print("⚠️ 未找到現有的 FAISS 索引和元數據，開始從 Google Drive 下載資料")
+    
+    # 從 Google Drive 下載檔案
+    file_id = '1IuGWrM_YwnYQwtp06SvWji695NJ7d_wS'  # 從 URL 中提取 ID
+    temp_csv_path = 'RecipeNLG_dataset.csv'
+    gdown.download(f'https://drive.google.com/uc?id={file_id}', temp_csv_path, quiet=False)
+    
+    print("✅ 檔案下載完成，開始處理資料...")
+    df = pd.read_csv(temp_csv_path, nrows=10000)
     df["text"] = df.apply(lambda row: f"Title: {row['title']}\nIngredients: {row['ingredients']}\nInstructions: {row['directions']}", axis=1)
+    
+    print("✅ 開始創建 embeddings...")
     df["embedding"] = df["text"].apply(lambda x: model.encode(x, convert_to_numpy=True))
     
     embeddings = np.vstack(df["embedding"].values)
     embedding_dim = embeddings.shape[1]
+    
+    print(f"✅ 創建 FAISS 索引 (維度: {embedding_dim})...")
     index = faiss.IndexFlatL2(embedding_dim)
     index.add(embeddings)
     
+    print("✅ 保存 FAISS 索引和元數據...")
     faiss.write_index(index, FAISS_INDEX_PATH)
     df.to_csv(METADATA_PATH, index=False)
+    
+    # 可選清理臨時檔案
+    if os.path.exists(temp_csv_path):
+        os.remove(temp_csv_path)
+    print("✅ 處理完成！")
 
 # ----------------------------------------- 
 # 🔹 Firestore 函數
