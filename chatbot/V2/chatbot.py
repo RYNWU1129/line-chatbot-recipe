@@ -121,25 +121,31 @@ LINE_ACCESS_TOKEN = os.getenv("LINE_ACCESS_TOKEN")
 LINE_SECRET = os.getenv("LINE_SECRET")
 
 # ✅ 讀取 Firebase 憑證
+# 讀取 Firebase 憑證
 firebase_credentials_json = os.getenv("FIREBASE_CREDENTIALS")
 
 if firebase_credentials_json:
     try:
-        firebase_credentials_json = ast.literal_eval(firebase_credentials_json)  # 轉回字典格式
-    except:
-        pass  # 如果已經是字典格式，則跳過
+        if isinstance(firebase_credentials_json, str):
+            cred_dict = json.loads(firebase_credentials_json)  # 只有當它是字串時才解析
+        else:
+            cred_dict = firebase_credentials_json  # 如果已經是字典，直接使用
+        
+        cred = credentials.Certificate(cred_dict)
 
-    cred_dict = json.loads(firebase_credentials_json)  # ✅ 確保 JSON 格式正確
-    cred = credentials.Certificate(cred_dict)
+        # 🔍 **先檢查 Firebase 是否已初始化**
+        if not firebase_admin._apps:
+            firebase_admin.initialize_app(cred)
+            print("✅ Firestore database initialized successfully!")
+        else:
+            print("⚠️ Firebase app already initialized, skipping re-initialization.")
 
-    # 🔍 **先檢查 Firebase 是否已初始化**
-    if not firebase_admin._apps:
-        firebase_admin.initialize_app(cred)
-        print("✅ Firestore database initialized successfully!")
-    else:
-        print("⚠️ Firebase app already initialized, skipping re-initialization.")
+    except Exception as e:
+        print(f"❌ Firebase Initialization Error: {e}")
+        raise ValueError("Failed to load Firebase credentials.")
 else:
     raise ValueError("❌ Firebase credentials not found! Please set FIREBASE_CREDENTIALS in the environment variables.")
+
 
 # ✅ 初始化 Firestore
 db = firestore.client()
