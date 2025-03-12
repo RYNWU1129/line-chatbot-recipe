@@ -110,6 +110,7 @@ import os
 import threading
 import firebase_admin
 from firebase_admin import credentials, firestore
+import json
 
 # 導入 RAG 相關函數
 from RAG import chat_with_model, initialize_rag
